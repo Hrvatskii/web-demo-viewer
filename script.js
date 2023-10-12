@@ -21,7 +21,10 @@ const mapInfo = {
   },
 }
 
-document.addEventListener("click", calibrate)
+// Create a document fragment to hold all the players
+const fragment = document.createDocumentFragment();
+
+document.addEventListener("click", calibrate);
 
 let clicks = 0;
 const chamberName = "08";
@@ -37,7 +40,7 @@ function calibrate(event) {
     otherXScreen = event.clientX;
     otherYScreen = event.clientY;
     document.removeEventListener("click", calibrate);
-    console.log(beginningXScreen, beginningYScreen, otherXScreen, otherYScreen)
+    // //console.log(beginningXScreen, beginningYScreen, otherXScreen, otherYScreen)
   }
 }
 
@@ -47,6 +50,17 @@ const fileInput = document.getElementById('fileInput');
 fileInput.addEventListener('change', handleFileSelect, false);
 
 function handleFileSelect(event) {
+  // initialize eta body
+  const eta = document.createElement("p");
+  eta.id = "eta";
+  document.body.append(eta)
+  
+  // variables used for eta things
+  let currentFile = 0;
+  let totalTime = 0;
+  let averageTime = 1;
+  let timeLeft = 0;
+
   const files = event.target.files;
 
   for (const file of files) {
@@ -67,28 +81,46 @@ function handleFileSelect(event) {
     reader.readAsArrayBuffer(file);
 
     bitsPromise.then((bits) => {
-      parseDemo(bits, file);
+      const timeBefore = Date.now();
+      currentFile++;
+      // console.time("parse");
+      eta.innerText = `Parsing ${currentFile}/${files.length}\nETA: ${timeLeft} ms\nTime elapsed: ${totalTime} ms\nAverage: ${averageTime.toFixed(0)} ms`
+      parseDemo(bits, file, files.length);
+      // console.timeEnd("parse");
+      const timeAfter = Date.now();
+      totalTime += (timeAfter - timeBefore);
+      averageTime = totalTime / currentFile;
+      timeLeft = (averageTime * (files.length - currentFile)).toFixed(0);
     });
   }
-  displayToScreen();
 }
 
 const playerInformation = [];
 
-function parseDemo(bits, file) {
+function parseDemo(bits, file, demosAmount) {
   parseHeader(bits);
 
   // offset is after the header
   let offset = 1072 * 8;
 
-  const messages = [];
+  const positionX = new Map();
+  const positionY = new Map();
+  const yaw = new Map();
+
+  let currentTick = 0;
 
   while (offset < (file.size * 8)) {
-    let message = parseMessage(offset, bits)
+    const [message, OverheadSize, type] = parseMessage(offset, bits)
     // the stop message
-    if (message.Type === 7) break;
-    messages.push(message);
-    offset += message.OverheadSize;
+    if (type === 7) break;
+    if (type === 5) { // usercmd
+      currentTick++;
+    } else if (type === 2) { // packet
+      positionX.set(currentTick, message.PacketInfo.CmdInfo.ViewOrigin[0]);
+      positionY.set(currentTick, message.PacketInfo.CmdInfo.ViewOrigin[1]);
+      yaw.set(currentTick, message.PacketInfo.CmdInfo.ViewAngles[1]);
+    }  
+    offset += OverheadSize;
   }
 
   // c_orthowidth
@@ -100,12 +132,21 @@ function parseDemo(bits, file) {
   // how much bigger a pixel is compared to a unit
   const ratio = width / screenWidth;
 
-  playerInformation.push(findViewInformation(messages, ratio, width, screenWidth));
+  playerInformation.push(findViewInformation(positionX, positionY, yaw, ratio, currentTick));
+
+  if (demosAmount === playerInformation.length) {
+    document.getElementById("eta").innerText = "Done.";
+    setTimeout(() => {
+      document.getElementById("eta").remove();
+    }, 2000);
+    document.body.append(fragment);
+    displayToScreen();
+  }
 }
 
 function displayToScreen() {
   let currentTick = 0;
-
+  
   let timer = setInterval(() => {
     playerInformation.forEach((player) => {
       if (currentTick >= player.userCmdsLength) return;
@@ -118,37 +159,35 @@ function displayToScreen() {
   }, 15);
 }
 
-function findViewInformation(messages, ratio, width, screenWidth) {
+function findViewInformation(positionX, positionY, yaw, ratio, length) {
+  // console.log(length)
   let playerCircle = document.createElement("div");
+  
+  const red = Math.floor(Math.random() * 255);
+  const green = Math.floor(Math.random() * 255);
+  const blue = Math.floor(Math.random() * 255);
+  const color = `rgb(${red}, ${green}, ${blue})`;
+  
   playerCircle.innerHTML = `
   <div class="arrow-container">
-    <div class="arrow">
-      <div class="left-right-container">
-        <div class="left"></div>
-        <div class="right"></div>
-      </div>
-    </div>
+  <div class="arrow" style="background-color: ${color}">
+  <div class="left-right-container">
+  <div class="left" style="background-color: ${color}"></div>
+  <div class="right" style="background-color: ${color}"></div>
+  </div>
+  </div>
   </div>
   `;
   playerCircle.className = "player";
-  document.body.append(playerCircle);
-
-  // filter out packets and usercmds
-  const packets = messages.filter(message => message.Type === 2);
-  const userCmdsLength = messages.filter(message => message.Type === 5).length;
-  console.log(packets)
-
-  // isolate yaw, positionX and positionY
-  const yaw = packets.map(msg => msg.PacketInfo.CmdInfo.ViewAngles[1]).filter(angle => angle !== 0);
-  const positionX = packets.map(msg => msg.PacketInfo.CmdInfo.ViewOrigin[0]).filter(position => position !== 0);
-  const positionY = packets.map(msg => msg.PacketInfo.CmdInfo.ViewOrigin[1]).filter(position => position !== 0);
-
+  playerCircle.style.backgroundColor = color;
+  fragment.append(playerCircle)
+  
   // loads of variables that vary based on what chamber and orientation we're looking at
   let offsetX, offsetY, angleOffset, multiplierX, multiplierY, rotationMultiplier;
-
+  
   // the start position for the player in coordinates on the map itself
-  beginningXInGame = Number(positionX[0]);
-  beginningYInGame = Number(positionY[0]);
+  beginningXInGame = Number(positionX.get(0));
+  beginningYInGame = Number(positionY.get(0));
 
   // checking for every possible case and applying the appropriate offsets etc
   // x axis
@@ -157,58 +196,59 @@ function findViewInformation(messages, ratio, width, screenWidth) {
     multiplierX = 1;
     rotationMultiplier = 1;
     angleOffset = 180;
-    console.log("x1");
+    // console.log("x1");
   } else if (beginningXScreen < otherXScreen && beginningXInGame < otherXInGame) {
     offsetX = beginningXScreen - (beginningXInGame / ratio);
     multiplierX = 1;
     rotationMultiplier = 1;
     angleOffset = 180;
-    console.log("x2");
+    // console.log("x2");
   } else if (beginningXScreen > otherXScreen && beginningXInGame < otherXInGame) {
     offsetX = beginningXScreen + (beginningXInGame / ratio);
     multiplierX = -1;
     rotationMultiplier = -1;
     angleOffset = 0;
-    console.log("x3");
+    // console.log("x3");
   } else {
     offsetX = beginningXScreen + (beginningXInGame / ratio);
     multiplierX = -1;
     rotationMultiplier = -1;
     angleOffset = 0;
-    console.log("x4");
+    // console.log("x4");
   }
   
   // y axis
   if (beginningYScreen > otherYScreen && beginningYInGame > otherYInGame) {
     offsetY = beginningYScreen - (beginningYInGame / ratio);
     multiplierY = 1;
-    console.log("y1");
+    // console.log("y1");
   } else if (beginningYScreen < otherYScreen && beginningYInGame < otherYInGame) {
     offsetY = beginningYScreen - (beginningYInGame / ratio);
     multiplierY = 1;
-    console.log("y2");
+    // console.log("y2");
   } else if (beginningYScreen > otherYScreen && beginningYInGame < otherYInGame) {
     offsetY = beginningYScreen + (beginningYInGame / ratio);
     multiplierY = -1;
-    console.log("y3");
+    // console.log("y3");
   } else {
     offsetY = beginningYScreen + (beginningYInGame / ratio);
     multiplierY = -1;
-    console.log("y4");
+    // console.log("y4");
   }
-
+  
   const translateX = new Map();
   const translateY = new Map();
   const rotation = new Map();
-
-  for (let frame = 0; frame < userCmdsLength; frame++) {
-    translateX.set(frame, `calc((${multiplierX} * ${positionX[frame]}px / ${ratio}) - 50% + ${offsetX}px)`)
-    translateY.set(frame, `calc((${multiplierY} * ${positionY[frame]}px / ${ratio}) - 50% + ${offsetY}px)`)
-    rotation.set(frame, `rotateZ(${yaw[frame] * rotationMultiplier + angleOffset}deg)`)
+  
+  // create the css transform values for the player for each frame
+  for (let frame = 0; frame < length; frame++) {
+    translateX.set(frame, `calc((${multiplierX} * ${positionX.get(frame)}px / ${ratio}) - 50% + ${offsetX}px)`)
+    translateY.set(frame, `calc((${multiplierY} * ${positionY.get(frame)}px / ${ratio}) - 50% + ${offsetY}px)`)
+    rotation.set(frame, `rotateZ(${yaw.get(frame) * rotationMultiplier + angleOffset}deg)`)
   }
 
   return {
-    "userCmdsLength": userCmdsLength,
+    "userCmdsLength": length,
     "playerCircle": playerCircle,
     "translateX": translateX,
     "translateY": translateY,
@@ -241,127 +281,142 @@ function parseMessage(offset, bits) {
 }
 
 function parsePacketMessage(offset, bits) {
-  let packetMsg = [
-      {
-        "Type": 0,
-        "Tick": 0,
-        "PacketInfo": {
-          "CmdInfo": {
-            "Flags": 0,
-            "ViewOrigin": [],
-            "ViewAngles": [],
-            "LocalViewAngles": [],
-            "ViewOrigin2": [],
-            "ViewAngles2": [],
-            "LocalViewAngles2": []
-          }
-        },
-        "InSequence": 0,
-        "OutSequence": 0,
-        "Size": 0,
-        "Data": [],
-        "OverheadSize": (93*8)
-      }
-  ]
+  const packetMsg =
+    {
+      //"Type": 0,
+      // "Tick": 0,
+      "PacketInfo": {
+        "CmdInfo": {
+          // "Flags": 0,
+          "ViewOrigin": [],
+          "ViewAngles": [],
+          // "LocalViewAngles": [],
+          // "ViewOrigin2": [],
+          // "ViewAngles2": [],
+          // "LocalViewAngles2": []
+        }
+      },
+      // "InSequence": 0,
+      // "OutSequence": 0,
+      // "Size": 0,
+      // "Data": [],
+      //"OverheadSize": (93*8)
+    }
 
-  packetMsg[0].Type = bitsToInt(bits, offset, 8);
-  packetMsg[0].Tick = bitsToInt(bits, offset + 8, 32);
+  //packetMsg.Type = bitsToInt(bits, offset, 8);
+  // packetMsg.Tick = bitsToInt(bits, offset + 8, 32);
 
-  packetMsg[0].PacketInfo.CmdInfo.Flags = bitsToInt(bits, offset + 40, 32);
+  // packetMsg.PacketInfo.CmdInfo.Flags = bitsToInt(bits, offset + 40, 32);
 
-  packetMsg[0].PacketInfo.CmdInfo.ViewOrigin       = readFloatArr(bits, offset + 72, 96, 3);
-  packetMsg[0].PacketInfo.CmdInfo.ViewAngles       = readFloatArr(bits, offset + 168, 96, 3);
-  packetMsg[0].PacketInfo.CmdInfo.LocalViewAngles  = readFloatArr(bits, offset + 264, 96, 3);
-  packetMsg[0].PacketInfo.CmdInfo.ViewOrigin2      = readFloatArr(bits, offset + 360, 96, 3);
-  packetMsg[0].PacketInfo.CmdInfo.ViewAngles2      = readFloatArr(bits, offset + 456, 96, 3);
-  packetMsg[0].PacketInfo.CmdInfo.LocalViewAngles2 = readFloatArr(bits, offset + 552, 96, 3);
+  packetMsg.PacketInfo.CmdInfo.ViewOrigin       = readFloatArr(bits, offset + 72, 96, 3);
+  packetMsg.PacketInfo.CmdInfo.ViewAngles       = readFloatArr(bits, offset + 168, 96, 3);
+  // packetMsg.PacketInfo.CmdInfo.LocalViewAngles  = readFloatArr(bits, offset + 264, 96, 3);
+  // packetMsg.PacketInfo.CmdInfo.ViewOrigin2      = readFloatArr(bits, offset + 360, 96, 3);
+  // packetMsg.PacketInfo.CmdInfo.ViewAngles2      = readFloatArr(bits, offset + 456, 96, 3);
+  // packetMsg.PacketInfo.CmdInfo.LocalViewAngles2 = readFloatArr(bits, offset + 552, 96, 3);
 
-  packetMsg[0].InSequence = bitsToInt(bits, offset + 648, 32);
-  packetMsg[0].OutSequence = bitsToInt(bits, offset + 680, 32);
-  packetMsg[0].Size = bitsToInt(bits, offset + 712, 32);
+  // packetMsg.InSequence = bitsToInt(bits, offset + 648, 32);
+  // packetMsg.OutSequence = bitsToInt(bits, offset + 680, 32);
+  // packetMsg.Size = bitsToInt(bits, offset + 712, 32);
 
-  packetMsg[0].OverheadSize = packetMsg[0].OverheadSize + packetMsg[0].Size * 8;
+  // packetMsg.OverheadSize = packetMsg.OverheadSize + packetMsg.Size * 8;
 
-  return packetMsg[0];
+  const OverheadSize = (93 * 8) + (bitsToInt(bits, offset + 712, 32) * 8);
+
+  const type = bitsToInt(bits, offset, 8);
+
+
+  return [packetMsg, OverheadSize, type];
 }
 
 function parseConsoleCmdMessage(offset, bits) {
-  let ConsoleCmdMsg = [
-    {
-      "Type": 0,
-      "Tick": 0,
-      "Size": 0,
-      "Data": "",
-      "OverheadSize": (9*8)
-    }
-  ]
+  // const ConsoleCmdMsg =
+  //   {
+  //     // "Type": 0,
+  //     // "Tick": 0,
+  //     // "Size": 0,
+  //     // "Data": "",
+  //     "OverheadSize": (9*8)
+  //   }
 
-  ConsoleCmdMsg[0].Type = bitsToInt(bits, offset, 8);
-  ConsoleCmdMsg[0].Tick = bitsToInt(bits, offset + 8, 32);
-  ConsoleCmdMsg[0].Size = bitsToInt(bits, offset + 40, 32);
-  ConsoleCmdMsg[0].Data = bitsToString(bits, offset + 72, ConsoleCmdMsg[0].Size * 8);
+  // ConsoleCmdMsg.Type = bitsToInt(bits, offset, 8);
+  // ConsoleCmdMsg.Tick = bitsToInt(bits, offset + 8, 32);
+  // ConsoleCmdMsg.Size = bitsToInt(bits, offset + 40, 32);
+  // ConsoleCmdMsg.Data = bitsToString(bits, offset + 72, ConsoleCmdMsg.Size * 8);
 
-  ConsoleCmdMsg[0].OverheadSize = ConsoleCmdMsg[0].OverheadSize + ConsoleCmdMsg[0].Size * 8;
+  // ConsoleCmdMsg.OverheadSize = ConsoleCmdMsg.OverheadSize + ConsoleCmdMsg.Size * 8;
 
-  return ConsoleCmdMsg[0];
+  const OverheadSize = (9*8) + bitsToInt(bits, offset + 40, 32) * 8;
+
+  //const type = bitsToInt(bits, offset, 8);
+
+  return [[], OverheadSize];
 }
 
 function parseSyncTickMessage(offset, bits) {
-  let SyncTickMsg = [
-    {
-      "Type": 0,
-      "Tick": 0,
-      "OverheadSize": (5*8)
-    }
-  ]
+  // let SyncTickMsg = [
+  //   {
+  //     "Type": 0,
+  //     "Tick": 0,
+  //     "OverheadSize": (5*8)
+  //   }
+  // ]
 
-  SyncTickMsg[0].Type = bitsToInt(bits, offset, 8);
-  SyncTickMsg[0].Tick = bitsToInt(bits, offset + 8, 32);
+  // SyncTickMsg[0].Type = bitsToInt(bits, offset, 8);
+  // SyncTickMsg[0].Tick = bitsToInt(bits, offset + 8, 32);
+
+  const OverheadSize = (5*8);
   
-  return SyncTickMsg[0];
+  return [[], OverheadSize];
 }
 
 function parseUserCmdMessage(offset, bits) {
-  let UserCmdMsg = [
-    {
-      "Type": 0,
-      "Tick": 0,
-      "Cmd": 0,
-      "Size": 0,
-      "Data": "",
-      "OverheadSize": (13*8)
-    }
-  ]
+  // let UserCmdMsg = [
+  //   {
+  //     "Type": 0,
+  //     "Tick": 0,
+  //     "Cmd": 0,
+  //     "Size": 0,
+  //     "Data": "",
+  //     "OverheadSize": (13*8)
+  //   }
+  // ]
 
-  UserCmdMsg[0].Type = bitsToInt(bits, offset, 8);
-  UserCmdMsg[0].Tick = bitsToInt(bits, offset + 8, 32);
-  UserCmdMsg[0].Cmd = bitsToInt(bits, offset + 40, 32);
-  UserCmdMsg[0].Size = bitsToInt(bits, offset + 72, 32);
-  UserCmdMsg[0].Data = bitsToString(bits, offset + 104, UserCmdMsg[0].Size * 8);
+  // UserCmdMsg[0].Type = bitsToInt(bits, offset, 8);
+  // UserCmdMsg[0].Tick = bitsToInt(bits, offset + 8, 32);
+  // UserCmdMsg[0].Cmd = bitsToInt(bits, offset + 40, 32);
+  // UserCmdMsg[0].Size = bitsToInt(bits, offset + 72, 32);
+  // UserCmdMsg[0].Data = bitsToString(bits, offset + 104, UserCmdMsg[0].Size * 8);
 
-  UserCmdMsg[0].OverheadSize = UserCmdMsg[0].OverheadSize + UserCmdMsg[0].Size * 8;
+  // UserCmdMsg[0].OverheadSize = UserCmdMsg[0].OverheadSize + UserCmdMsg[0].Size * 8;
 
-  return UserCmdMsg[0];
+  const OverheadSize = (13*8) + bitsToInt(bits, offset + 72, 32) * 8;
+
+  const type = bitsToInt(bits, offset, 8);
+
+  return [[], OverheadSize, type];
 }
 
 function parseDataTablesMessage(offset, bits) {
-  let DataTablesMsg = [
-    {
-      "Type": 0,
-      "Tick": 0,
-      "Size": 0,
-      "Data": "",
-      "OverheadSize": (9*8)
-    }
-  ]
+  // let DataTablesMsg = [
+  //   {
+  //     "Type": 0,
+  //     "Tick": 0,
+  //     "Size": 0,
+  //     "Data": "",
+  //     "OverheadSize": (9*8)
+  //   }
+  // ]
 
-  DataTablesMsg[0].Type = bitsToInt(bits, offset, 8);
-  DataTablesMsg[0].Tick = bitsToInt(bits, offset + 8, 32);
-  DataTablesMsg[0].Size = bitsToInt(bits, offset + 40, 32);
+  // DataTablesMsg[0].Type = bitsToInt(bits, offset, 8);
+  // DataTablesMsg[0].Tick = bitsToInt(bits, offset + 8, 32);
+  // DataTablesMsg[0].Size = bitsToInt(bits, offset + 40, 32);
 
-  DataTablesMsg[0].OverheadSize = DataTablesMsg[0].OverheadSize + DataTablesMsg[0].Size * 8;
+  // DataTablesMsg[0].OverheadSize = DataTablesMsg[0].OverheadSize + DataTablesMsg[0].Size * 8;
 
-  return DataTablesMsg[0];
+  const OverheadSize = (9*8) + bitsToInt(bits, offset + 40, 32) * 8;
+
+  return [[], OverheadSize];
 }
 
 function parseStopMessage(offset, bits) {
@@ -371,26 +426,28 @@ function parseStopMessage(offset, bits) {
     }
   ]
   
-  return StopMsg[0];
+  return [StopMsg[0], 0, 7];
 }
 
 function parseStringTablesMessage(offset, bits) {
-  let StringTablesMsg = [
-    {
-      "Type": 0,
-      "Tick": 0,
-      "Size": 0,
-      "Data": "",
-      "OverheadSize": (9*8)
-    }
-  ]
+  // let StringTablesMsg = [
+  //   {
+  //     "Type": 0,
+  //     "Tick": 0,
+  //     "Size": 0,
+  //     "Data": "",
+  //     "OverheadSize": (9*8)
+  //   }
+  // ]
 
-  StringTablesMsg[0].Type = bitsToInt(bits, offset, 8);
-  StringTablesMsg[0].Tick = bitsToInt(bits, offset + 8, 32);
-  StringTablesMsg[0].Size = bitsToInt(bits, offset + 40, 32);
-  StringTablesMsg[0].OverheadSize = StringTablesMsg[0].OverheadSize + StringTablesMsg[0].Size * 8;
+  // StringTablesMsg[0].Type = bitsToInt(bits, offset, 8);
+  // StringTablesMsg[0].Tick = bitsToInt(bits, offset + 8, 32);
+  // StringTablesMsg[0].Size = bitsToInt(bits, offset + 40, 32);
+  // StringTablesMsg[0].OverheadSize = StringTablesMsg[0].OverheadSize + StringTablesMsg[0].Size * 8;
 
-  return StringTablesMsg[0];
+  const OverheadSize = (9*8) + bitsToInt(bits, offset + 40, 32) * 8;
+
+  return [[], OverheadSize];
 }
 
 // contains the values for messages that appear in the demo
@@ -522,7 +579,7 @@ function parseHeader(bits) {
   Measured Time \t : ${Math.floor(headerValues.PlaybackTime / 60) === 0 ? "" : Math.floor(headerValues.PlaybackTime / 60) + ":"}${(headerValues.PlaybackTime - 60 * Math.floor(headerValues.PlaybackTime / 60)).toFixed(3)}
   Measured Ticks \t : ${headerValues.PlaybackTicks}
   `
-  console.log(header);
+  // console.log(header);
 }
 
 // use to convert bits to a string format

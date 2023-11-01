@@ -4,91 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Document</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-
-<style>
-  p {
-    font-family: monospace;
-    white-space: pre;
-    color: white;
-  }
-
-  body {
-    background-color: black;
-    margin: 0;
-    padding: 0;
-  }
-
-  .player {
-    width: 30px;
-    height: 30px;
-    position: absolute;
-    border-radius: 50%;
-  }
-
-  .arrow-container {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    height: 100%;
-  }
-  
-  .arrow {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    position: relative;
-    transform: translate(-99%);
-    width: 50px;
-    height: 5px;
-    border-top-left-radius: 40px;
-    border-bottom-left-radius: 40px;
-  }
-
-  .left-right-container {
-    position: absolute;
-    left: -1px;
-    width: 10px;
-    height: 10px;
-  }
-
-  .right,
-  .left {
-    width: 20px;
-    height: 5px;
-    transform-origin: center left;
-    border-radius: 40px;
-  }
-
-  .right {
-    transform: rotate(-45deg) translateX(2px);
-  }
-
-  .left {
-    transform: rotate(45deg) translateX(2px);
-  }
-
-  #chamber {
-    position: absolute; 
-    user-select: none; 
-    -moz-user-select: none; 
-    width: 100%; 
-    object-fit: cover; 
-    left: 0;
-  }
-
-  #eta {
-    color: white;
-    padding: 0;
-    margin: 5px;
-    position: absolute;
-    right: 0;
-    top: 0;
-  }
-</style>
-
 <body>
-  <img id="chamber" src="08_2.png" draggable="false">
+  <img id="chamber" src="09.png" draggable="false">
   <input style="position: absolute;" type="file" id="fileInput" multiple/>
   <script src="script.js"></script>
 </body>

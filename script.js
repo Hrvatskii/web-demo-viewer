@@ -27,7 +27,7 @@ const fragment = document.createDocumentFragment();
 document.addEventListener("click", calibrate);
 
 let clicks = 0;
-const chamberName = "08";
+const chamberName = "09";
 const otherXInGame = mapInfo[chamberName].otherXInGame;
 const otherYInGame = mapInfo[chamberName].otherYInGame;
 let beginningXScreen, beginningYScreen, otherXScreen, otherYScreen;
@@ -44,16 +44,39 @@ function calibrate(event) {
   }
 }
 
-
 const fileInput = document.getElementById('fileInput');
 
 fileInput.addEventListener('change', handleFileSelect, false);
 
+function resizePlayerList(event) {
+  const yPos = event.clientY;
+  const screenHeight = document.documentElement.clientHeight;
+  const newHeight = screenHeight - yPos;
+  document.getElementById("player-list").style.height = newHeight+"px";
+}
+
 function handleFileSelect(event) {
+  // initialize the list of demos
+  const playerList = document.createElement("div");
+  playerList.id = "player-list";
+  document.body.append(playerList);
+
+  const playerListTopBorder = document.createElement("div");
+  playerListTopBorder.id = "player-list-top-border";
+  playerList.append(playerListTopBorder);
+
+  playerListTopBorder.addEventListener("mousedown", () => {
+    document.body.addEventListener("mousemove", resizePlayerList);
+    playerList.style.maxHeight = "100vh";
+  });
+  document.body.addEventListener("mouseup", () => {
+    document.body.removeEventListener("mousemove", resizePlayerList);
+  });
+
   // initialize eta body
   const eta = document.createElement("p");
   eta.id = "eta";
-  document.body.append(eta)
+  document.body.append(eta);
   
   // variables used for eta things
   let currentFile = 0;
@@ -81,24 +104,162 @@ function handleFileSelect(event) {
     reader.readAsArrayBuffer(file);
 
     bitsPromise.then((bits) => {
+      // really ugly code in order to get the eta things working
       const timeBefore = Date.now();
       currentFile++;
-      // console.time("parse");
       eta.innerText = `Parsing ${currentFile}/${files.length}\nETA: ${timeLeft} ms\nTime elapsed: ${totalTime} ms\nAverage: ${averageTime.toFixed(0)} ms`
-      parseDemo(bits, file, files.length);
-      // console.timeEnd("parse");
+
+      const [demoLength, fileName, clientName, header] = parseDemo(bits, file);
+
+      // i hate this i hate this i hate this
+      const playerRow = document.createElement("div");
+      playerRow.className = "player-row";
+
+      const demoLengthContainer = document.createElement("p");
+      demoLengthContainer.className = "demo-length-container";
+      demoLengthContainer.innerText = demoLength;
+
+      const fileNameContainer = document.createElement("p");
+      fileNameContainer.className = "file-name-container";
+      fileNameContainer.innerText = fileName;
+
+      const clientNameContainer = document.createElement("p");
+      clientNameContainer.className = "client-name-container";
+      clientNameContainer.innerText = clientName;
+
+      const openKeyboardButton = document.createElement("button");
+      openKeyboardButton.className = "normal-button open-keyboard";
+      openKeyboardButton.innerHTML = "&#9856;";
+      openKeyboardButton.title = "open keyboard inputs";
+      openKeyboardButton.onclick = () => showBox(createKeyboard(), "keyboard-grid", fileName);
+
+      const openHeaderButton = document.createElement("button");
+      openHeaderButton.className = "normal-button open-header";
+      openHeaderButton.innerHTML = "&#10138;";
+      openHeaderButton.title = "open demo header";
+      // bruh
+      openHeaderButton.onclick = () => showBox(`
+Filestamp \t : ${header.Filestamp}
+DemoProtocol \t : ${header.DemoProtocol}
+NetProtocol \t : ${header.NetProtocol}
+ServerName \t : ${header.ServerName}
+ClientName \t : ${header.ClientName}
+MapName \t : ${header.MapName}
+GameDir \t : ${header.GameDir}
+PlaybackTime \t : ${header.PlaybackTime}
+PlaybackTicks \t : ${header.PlaybackTicks}
+PlaybackFrames \t : ${header.PlaybackFrames}
+SignOnLength \t : ${header.SignOnLength}
+
+Adjusted Time \t : ${header.AdjustedTime}
+Adjusted Ticks \t : ${header.AdjustedTicks}
+      `);
+
+      playerRow.append(demoLengthContainer);
+      playerRow.append(fileNameContainer);
+      playerRow.append(clientNameContainer);
+      playerRow.append(openKeyboardButton);
+      playerRow.append(openHeaderButton);
+
+      playerList.append(playerRow);
+
       const timeAfter = Date.now();
       totalTime += (timeAfter - timeBefore);
       averageTime = totalTime / currentFile;
       timeLeft = (averageTime * (files.length - currentFile)).toFixed(0);
+
+      // if all the demos have been parsed we start the display
+      if (files.length === playerInformation.length) {
+        document.getElementById("eta").innerText = "Done.";
+        setTimeout(() => {
+          document.getElementById("eta").remove();
+        }, 2000);
+        document.body.append(fragment);
+        displayToScreen();
+      }
     });
   }
 }
 
+// "can we have a js framework?"
+// "we have a js framework at home"
+// js framework at home:
+function createKeyboard() {
+  let innerHtml = "";
+  function createKey(key, inputName, specialAttribute) {
+    innerHtml += `<div class="key ${specialAttribute ? specialAttribute : ""}" data-value="${inputName}" data-status="inactive">${key}</div>`
+  }
+
+  // why do i create such attrocities
+  createKey("");
+  createKey("");
+  createKey("W", "IN_FORWARD");
+  createKey("E", "IN_USE");
+  createKey("");
+  createKey("");
+
+  createKey("");
+  createKey("A", "IN_MOVELEFT");
+  createKey("S", "IN_BACK");
+  createKey("D", "IN_MOVERIGHT");
+  createKey("");
+  createKey("");
+
+  createKey("C", "IN_DUCK");
+  createKey("S", "IN_JUMP","long"); // takes up 3 normal squares
+  createKey("L", "IN_ATTACK");
+  createKey("R", "IN_ATTACK2");
+
+  return innerHtml;
+}
+
+function showBox(innerHtml, additionalClass, additionalDataset) {
+  const boxContainer = document.createElement("div");
+  boxContainer.className = "box-container";
+
+  const boxContent = document.createElement("div");
+  boxContent.className = `box-content ${additionalClass ? additionalClass : ""}`;
+
+  if (additionalDataset) boxContent.dataset.value = additionalDataset;
+
+  boxContent.innerHTML = innerHtml;
+  document.body.append(boxContainer);
+  boxContainer.append(boxContent)
+
+  const closeButton = document.createElement("button");
+  closeButton.className = "normal-button close-box";
+  closeButton.innerHTML = "&#10005;";
+  closeButton.onclick = () => boxContainer.remove();
+
+  let pos1 = 0, pos2 = 0, pos3 = 0; pos4 = 0;
+
+  boxContainer.addEventListener("mousedown", (event) => {
+    if (event.target.className !== "box-container") return;
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    document.body.addEventListener("mousemove", movebox);
+    document.body.addEventListener("mouseup", () => {
+      document.body.removeEventListener("mousemove", movebox);
+    })
+  })
+
+  function movebox(event) {
+    event.preventDefault();
+    pos1 = pos3 - event.clientX;
+    pos2 = pos4 - event.clientY;
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    boxContainer.style.top = (boxContainer.offsetTop - pos2) + "px";
+    boxContainer.style.left = (boxContainer.offsetLeft - pos1) + "px";
+  }
+
+  boxContent.append(closeButton);
+}
+
 const playerInformation = [];
 
-function parseDemo(bits, file, demosAmount) {
-  parseHeader(bits);
+function parseDemo(bits, file) {
+  const header = parseHeader(bits);
 
   // offset is after the header
   let offset = 1072 * 8;
@@ -106,22 +267,39 @@ function parseDemo(bits, file, demosAmount) {
   const positionX = new Map();
   const positionY = new Map();
   const yaw = new Map();
+  const buttons = new Map();
 
   let currentTick = 0;
+  let firstTick = 0;
+  let effectiveTick = 0;
 
   while (offset < (file.size * 8)) {
-    const [message, OverheadSize, type] = parseMessage(offset, bits)
+    const [message, OverheadSize, type, tick] = parseMessage(offset, bits);
     // the stop message
     if (type === 7) break;
     if (type === 5) { // usercmd
-      currentTick++;
+      if (firstTick === 0) firstTick = tick;
+      currentTick = tick;
+      effectiveTick = currentTick - firstTick;
+      buttons.set(effectiveTick, message.Data.Buttons);
     } else if (type === 2) { // packet
-      positionX.set(currentTick, message.PacketInfo.CmdInfo.ViewOrigin[0]);
-      positionY.set(currentTick, message.PacketInfo.CmdInfo.ViewOrigin[1]);
-      yaw.set(currentTick, message.PacketInfo.CmdInfo.ViewAngles[1]);
-    }  
+      positionX.set(effectiveTick, message.PacketInfo.CmdInfo.ViewOrigin[0]);
+      positionY.set(effectiveTick, message.PacketInfo.CmdInfo.ViewOrigin[1]);
+      yaw.set(effectiveTick, message.PacketInfo.CmdInfo.ViewAngles[1]);
+    }
+    // some demos (tas) have multiple usercmds on the first tick so we need to look at the actual tick count and not just count the amount of the message
     offset += OverheadSize;
   }
+
+  // add adjusted time to the header. i have no clue why the error is 3 and not just 1
+  header.AdjustedTicks = effectiveTick + 3;
+  header.AdjustedTime = ((effectiveTick + 3) * 0.015).toFixed(3);
+
+  //console.log(header)
+
+  // console.log(buttons)
+
+  //console.log(currentTick, file);
 
   // c_orthowidth
   const width = mapInfo[chamberName].width;
@@ -132,16 +310,9 @@ function parseDemo(bits, file, demosAmount) {
   // how much bigger a pixel is compared to a unit
   const ratio = width / screenWidth;
 
-  playerInformation.push(findViewInformation(positionX, positionY, yaw, ratio, currentTick));
+  playerInformation.push(findViewInformation(positionX, positionY, yaw, ratio, currentTick, buttons, file.name));
 
-  if (demosAmount === playerInformation.length) {
-    document.getElementById("eta").innerText = "Done.";
-    setTimeout(() => {
-      document.getElementById("eta").remove();
-    }, 2000);
-    document.body.append(fragment);
-    displayToScreen();
-  }
+  return [header.AdjustedTicks, file.name, header.ClientName, header];
 }
 
 function displayToScreen() {
@@ -154,12 +325,22 @@ function displayToScreen() {
       const translateY = player.translateY.get(currentTick);
       player.playerCircle.style.transform = `translate(${translateX}, ${translateY})`;
       player.playerCircle.children[0].style.transform = player.rotation.get(currentTick);
+      if (document.querySelector(`.box-content[data-value="${player.fileName}"]`)) {
+        for (const button of document.querySelector(`.box-content[data-value="${player.fileName}"]`).children) {
+          button.dataset.status = "inactive";
+        }
+      }
+      if (document.querySelector(`.box-content[data-value="${player.fileName}"]`) && player.buttons.get(currentTick)) {
+        player.buttons.get(currentTick).forEach((action) => {
+          document.querySelector(`.box-content[data-value="${player.fileName}"] .key[data-value="${action}"]`).dataset.status = "active";
+        })
+      }
     })
     currentTick++;
   }, 15);
 }
 
-function findViewInformation(positionX, positionY, yaw, ratio, length) {
+function findViewInformation(positionX, positionY, yaw, ratio, length, buttons, fileName) {
   // console.log(length)
   let playerCircle = document.createElement("div");
   
@@ -252,7 +433,9 @@ function findViewInformation(positionX, positionY, yaw, ratio, length) {
     "playerCircle": playerCircle,
     "translateX": translateX,
     "translateY": translateY,
-    "rotation": rotation
+    "rotation": rotation,
+    "buttons": buttons,
+    "fileName": fileName
   }
 }
 
@@ -371,30 +554,186 @@ function parseSyncTickMessage(offset, bits) {
 }
 
 function parseUserCmdMessage(offset, bits) {
-  // let UserCmdMsg = [
-  //   {
-  //     "Type": 0,
-  //     "Tick": 0,
-  //     "Cmd": 0,
-  //     "Size": 0,
-  //     "Data": "",
-  //     "OverheadSize": (13*8)
-  //   }
-  // ]
+  let UserCmdMsg = {
+    "Type": 0,
+    "Tick": 0,
+    "Cmd": 0,
+    "Size": 0,
+    "Data": {
+      "CommandNumber": 0,
+      "TickCount": 0,
+      "ViewAnglesX": 0,
+      "ViewAnglesY": 0,
+      "ViewAnglesZ": 0,
+      "ForwardMove": 0,
+      "SideMove": 0,
+      "UpMove": 0,
+      "Buttons": 0,
+      "Impulse": 0,
+      "WeaponSelect": 0,
+      "WeaponSubtype": 0,
+      "MouseDx": 0,
+      "MouseDy": 0
+    },
+    "OverheadSize": (13*8)
+  }
 
-  // UserCmdMsg[0].Type = bitsToInt(bits, offset, 8);
-  // UserCmdMsg[0].Tick = bitsToInt(bits, offset + 8, 32);
-  // UserCmdMsg[0].Cmd = bitsToInt(bits, offset + 40, 32);
-  // UserCmdMsg[0].Size = bitsToInt(bits, offset + 72, 32);
-  // UserCmdMsg[0].Data = bitsToString(bits, offset + 104, UserCmdMsg[0].Size * 8);
+  UserCmdMsg.Type = bitsToInt(bits, offset, 8);
+  UserCmdMsg.Tick = bitsToInt(bits, offset + 8, 32);
+  UserCmdMsg.Cmd = bitsToInt(bits, offset + 40, 32);
+  UserCmdMsg.Size = bitsToInt(bits, offset + 72, 32);
+  let data = bits.substring(offset + 104, offset + 104 + UserCmdMsg.Size * 8).replace(/0+$/, ''); // isolate bits
+  data = data.padEnd(data.length + 8 * Math.ceil(UserCmdMsg.Size / 8), "0"); // make it the correct length sometimes
+  data = data.padEnd(data.length + (8 - data.length % 8), "0"); // pad with 0s so its length is divisible by 8
 
-  // UserCmdMsg[0].OverheadSize = UserCmdMsg[0].OverheadSize + UserCmdMsg[0].Size * 8;
+  let CommandNumber, TickCount, ViewAnglesX, ViewAnglesY, ViewAnglesZ, ForwardMove, SideMove, UpMove, Buttons, Impulse, WeaponSelect, WeaponSubtype, MouseDx, MouseDy;
 
-  const OverheadSize = (13*8) + bitsToInt(bits, offset + 72, 32) * 8;
+  // pain
+  [CommandNumber, data] = ifOneExists(data, 32, "int");
+  [TickCount, data] = ifOneExists(data, 32, "int");
+  [ViewAnglesX, data] = ifOneExists(data, 32, "float");
+  [ViewAnglesY, data] = ifOneExists(data, 32, "float");
+  [ViewAnglesZ, data] = ifOneExists(data, 32, "float");
+  [ForwardMove, data] = ifOneExists(data, 32, "float");
+  [SideMove, data] = ifOneExists(data, 32, "float");
+  [UpMove, data] = ifOneExists(data, 32, "float");
+  [Buttons, data] = ifOneExists(data, 32, "int");
+  Buttons = findButtons(Buttons);
+  [Impulse, data] = ifOneExists(data, 1, "byte");
+  [WeaponSelect, data] = ifOneExists(data, 11, "int");
+  if (WeaponSelect !== null) [WeaponSubtype, data] = ifOneExists(data, 6, "int");
+  else WeaponSubtype = null;
+  [MouseDx, data] = ifOneExists(data, 16, "short");
+  [MouseDy, data] = ifOneExists(data, 16, "short");
 
-  const type = bitsToInt(bits, offset, 8);
+  UserCmdMsg.Data.CommandNumber = CommandNumber;
+  UserCmdMsg.Data.TickCount = TickCount;
+  UserCmdMsg.Data.ViewAnglesX = ViewAnglesX;
+  UserCmdMsg.Data.ViewAnglesY = ViewAnglesY;
+  UserCmdMsg.Data.ViewAnglesZ = ViewAnglesZ;
+  UserCmdMsg.Data.ForwardMove = ForwardMove;
+  UserCmdMsg.Data.SideMove = SideMove;
+  UserCmdMsg.Data.UpMove = UpMove;
+  UserCmdMsg.Data.Buttons = Buttons;
+  UserCmdMsg.Data.Impulse = Impulse;
+  UserCmdMsg.Data.WeaponSelect = WeaponSelect;
+  UserCmdMsg.Data.WeaponSubtype = WeaponSubtype;
+  UserCmdMsg.Data.MouseDx = MouseDx;
+  UserCmdMsg.Data.MouseDy = MouseDy;
 
-  return [[], OverheadSize, type];
+  UserCmdMsg.OverheadSize = (13*8) + bitsToInt(bits, offset + 72, 32) * 8;
+
+
+  return [UserCmdMsg, UserCmdMsg.OverheadSize, UserCmdMsg.Type, UserCmdMsg.Tick];
+}
+
+// optimize this in the future pretty please
+function ifOneExists(data, length, type) {
+  // see https://imgur.com/a/LRoI4r2
+
+  // find pointer index using *math*
+  const pointer = (data.length - 1) % 8;
+  //console.log("pointer", pointer);
+  if (data[pointer] === "1") {
+    //console.log("one exists, parse next ", length, " looking at ", type);
+    // declare array for little endian bits
+    let bitsLittleEndian = [];
+
+    // first bits, these are the remaining ones to the left of the pointer
+    bitsLittleEndian.unshift(data.substr(0, pointer));
+
+    // the next whole bytes
+    for (let i = 0; i < 8 * (Math.floor((length - pointer) / 8)); i += 8) {
+      bitsLittleEndian.unshift(data.substr(pointer + 1 + i, 8));
+    }
+
+    // remove everything before the next "full" byte
+    data = data.substr(8 * (Math.floor((length - pointer) / 8)) + pointer + 1, data.length);
+
+    // add the extra bits we need to compensate the first byte being shorter
+    bitsLittleEndian.unshift(data.substr(pointer, 8 - pointer));
+
+    //... and then remove those from the main data
+    data = data.substr(0, pointer) + data.substr(8, data.length);
+
+    // make the little endian bits into a string so we can process them
+    bitsLittleEndian = bitsLittleEndian.join("");
+
+    if (type === "int") {
+      // convert to unsigned integer then signed integer
+      const uint32Value = parseInt(bitsLittleEndian, 2);
+      const int32Value = uint32Value | 0;
+
+      return [int32Value, data];
+    } else if (type === "float") {
+      // convert the bits into a hexadecimal string
+      const hex = parseInt(bitsLittleEndian, 2).toString(16);
+
+      // convert the hexadecimal string into a float representation
+      const buffer = new ArrayBuffer(4);
+      const intView = new Uint32Array(buffer);
+      const floatView = new Float32Array(buffer);
+
+      intView[0] = parseInt(hex, 16);
+
+      return [floatView[0].toFixed(2), data];
+    } else if (type === "byte") {
+      // i think only Impulse has this data type so it's safe assuming it's only gonna be one byte
+      const byte = parseInt(bitsLittleEndian, 2) // turn into base 10
+                  .toString(16)                  // turn into base 16
+                  .padStart(2, "0");             // pad with 0 to make it two letters long
+
+      return [byte, data];
+    } else if (type === "short") {
+      const short = parseInt(bitsLittleEndian, 2) << 16 >> 16;
+      return [short, data];
+    }
+  } else {
+    //console.log("one doesnt exist, skip to next");
+    data = data.substr(0, pointer) + data.substr(pointer + 1, data.length);
+    return [null, data];
+  }
+}
+
+function findButtons(buttons) {
+  const buttonMap = new Map(
+    [
+      [0, "IN_ATTACK"],
+      [1, "IN_JUMP"],
+      [2, "IN_DUCK"],
+      [3, "IN_FORWARD"],
+      [4, "IN_BACK"],
+      [5, "IN_USE"],
+      [6, "IN_CANCEL"],
+      [7, "IN_LEFT"],
+      [8, "IN_RIGHT"],
+      [9, "IN_MOVELEFT"],
+      [10, "IN_MOVERIGHT"],
+      [11, "IN_ATTACK2"]
+    ]
+  )
+  const heldButtons = [];
+  for (let i = 0; i < buttonMap.size; i++) {
+    // check if the bit at mask is set to 1 in buttons
+    const mask = 1 << i;
+    const check = buttons & mask;
+    if (check) heldButtons.push(buttonMap.get(i));
+  }
+
+  return heldButtons.length ? heldButtons : null;
+}
+
+function bitsToBytes(data) {
+  let bytes = [];
+  for (let i = 0; i < data.length; i += 8) {
+    let byte = data.substr(i, 8);
+    byte = parseInt(byte, 2) // turn into base 10
+          .toString(16)      // turn into base 16
+          .padStart(2, "0"); // pad with 0 to make it two letters long
+    bytes.push(byte);
+  }
+  bytes = bytes.join(" ");
+  return bytes;
 }
 
 function parseDataTablesMessage(offset, bits) {
@@ -580,6 +919,8 @@ function parseHeader(bits) {
   Measured Ticks \t : ${headerValues.PlaybackTicks}
   `
   // console.log(header);
+
+  return headerValues;
 }
 
 // use to convert bits to a string format
@@ -619,7 +960,7 @@ function bitsToFloat(bits, index, length) {
   // isolates the bits and converts them to little endian
   let isolatedBits = bits.substring(index, index + length);
   isolatedBits = convertToLittleEndian(isolatedBits);
-
+  
   // convert the bits into a hexadecimal string
   const hex = parseInt(isolatedBits, 2).toString(16);
 

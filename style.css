@@ -1,0 +1,182 @@
+* {
+  font-family: monospace;
+  color: white;
+}
+
+body {
+  background-color: black;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  overflow-y: hidden; /* maybe breaks something for bigger chambers */
+}
+
+.player {
+  width: 30px;
+  height: 30px;
+  position: absolute;
+  border-radius: 50%;
+}
+
+.arrow-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.arrow {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+  transform: translate(-99%);
+  width: 50px;
+  height: 5px;
+  border-top-left-radius: 40px;
+  border-bottom-left-radius: 40px;
+}
+
+.left-right-container {
+  position: absolute;
+  left: -1px;
+  width: 10px;
+  height: 10px;
+}
+
+.right,
+.left {
+  width: 20px;
+  height: 5px;
+  transform-origin: center left;
+  border-radius: 40px;
+}
+
+.right {
+  transform: rotate(-45deg) translateX(2px);
+}
+
+.left {
+  transform: rotate(45deg) translateX(2px);
+}
+
+#chamber {
+  position: absolute; 
+  user-select: none; 
+  -moz-user-select: none; 
+  width: 100%; 
+  object-fit: cover; 
+  left: 0;
+}
+
+#eta {
+  color: white;
+  padding: 0;
+  margin: 5px;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+#player-list-top-border {
+  transform: translateY(-100%);
+  height: 0.5em;
+  width: 600px;
+  cursor: row-resize;
+  background-color: rgba(44, 44, 44, 0.486);
+  position: fixed;
+}
+
+#player-list {
+  min-width: 600px;
+  max-height: 400px;
+  min-height: 30px;
+  overflow-y: scroll;
+  background-color: rgba(0, 0, 0, 0.836);
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 999;
+}
+
+.player-row {
+  display: flex;
+  gap: 1em;
+}
+
+.player-row > * {
+  flex: 1;
+  display: inline;
+  margin: 0;
+}
+
+.player-row:nth-child(2n) {
+  background-color: rgba(12, 12, 12, 0.836);
+}
+
+.demo-length-container,
+.open-header,
+.open-keyboard {
+  flex: 0.1;
+}
+
+.normal-button {
+  background-color: transparent;
+  border: none;
+  color: white;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.box-container {
+  position: absolute;
+  top: 100%;
+  left: 100%;
+  transform: translate(-100%, -100%);
+  background-color: rgba(24, 24, 24, 0.521);
+  display: grid;
+  place-items: center;
+  padding: 1em;
+  white-space: pre;
+  cursor: move;
+}
+
+.box-content {
+  position: relative;
+  cursor: auto;
+  display: grid;
+  place-items: center;
+}
+
+.close-box {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.box-content.keyboard-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.key {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  user-select: none;
+}
+
+.key.long {
+  grid-column: 2 / -3;
+  width: 150px;
+}
+
+.key[data-status="inactive"] {
+  background-color: transparent;
+}
+
+.key[data-status="active"] {
+  background-color: black;
+}

@@ -17,7 +17,9 @@ const parseDataTablesMessage = (offset, bits) => {
 
   // DataTablesMsg[0].OverheadSize = DataTablesMsg[0].OverheadSize + DataTablesMsg[0].Size * 8;
 
-  const OverheadSize = (9*8) + bitsToInt(bits, offset + 40, 32) * 8;
+  const OverheadSize = 9 + bitsToInt(bits, offset + 5, 4);
+
+  // console.log("fuck", OverheadSize, offset)
 
   return [[], OverheadSize];
 }

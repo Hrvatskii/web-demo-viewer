@@ -1,79 +1,82 @@
-import { bitsToInt, ifOneExists } from "../bitReader.js";
+import { bitsToInt, ifOneExists, isolateBytes } from "../bitReader.js";
 
-const parseUserCmdMessage = (offset, bits) => {
+const parseUserCmdMessage = (offset, data) => {
   let UserCmdMsg = {
     "Type": 0,
     "Tick": 0,
     "Cmd": 0,
     "Size": 0,
     "Data": {
-      "CommandNumber": 0,
-      "TickCount": 0,
-      "ViewAnglesX": 0,
-      "ViewAnglesY": 0,
-      "ViewAnglesZ": 0,
-      "ForwardMove": 0,
-      "SideMove": 0,
-      "UpMove": 0,
+      // "CommandNumber": 0,
+      // "TickCount": 0,
+      // "ViewAnglesX": 0,
+      // "ViewAnglesY": 0,
+      // "ViewAnglesZ": 0,
+      // "ForwardMove": 0,
+      // "SideMove": 0,
+      // "UpMove": 0,
       "Buttons": 0,
-      "Impulse": 0,
-      "WeaponSelect": 0,
-      "WeaponSubtype": 0,
-      "MouseDx": 0,
-      "MouseDy": 0
+      // "Impulse": 0,
+      // "WeaponSelect": 0,
+      // "WeaponSubtype": 0,
+      // "MouseDx": 0,
+      // "MouseDy": 0
     },
     "OverheadSize": (13*8)
   }
 
-  UserCmdMsg.Type = bitsToInt(bits, offset, 8);
-  UserCmdMsg.Tick = bitsToInt(bits, offset + 8, 32);
-  UserCmdMsg.Cmd = bitsToInt(bits, offset + 40, 32);
-  UserCmdMsg.Size = bitsToInt(bits, offset + 72, 32);
-  let data = bits.substring(offset + 104, offset + 104 + UserCmdMsg.Size * 8).replace(/0+$/, ''); // isolate bits
-  data = data.padEnd(data.length + 8 * Math.ceil(UserCmdMsg.Size / 8), "0"); // make it the correct length sometimes
-  data = data.padEnd(data.length + (8 - data.length % 8), "0"); // pad with 0s so its length is divisible by 8
+  UserCmdMsg.Type = bitsToInt(data, offset, 1);
+  UserCmdMsg.Tick = bitsToInt(data, offset + 1, 4);
+  UserCmdMsg.Cmd = bitsToInt(data, offset + 5, 4);
+  UserCmdMsg.Size = bitsToInt(data, offset + 9, 4);
+  let UserCmdData = isolateBytes(data, offset + 13, UserCmdMsg.Size);
+  // UserCmdData = UserCmdData.padEnd(UserCmdData.length + 8 * Math.ceil(UserCmdMsg.Size / 8), "0"); // make it the correct length sometimes
+  // UserCmdData = UserCmdData.padEnd(UserCmdData.length + (8 - UserCmdData.length % 8), "0"); // pad with 0s so its length is divisible by 8
 
   let CommandNumber, TickCount, ViewAnglesX, ViewAnglesY, ViewAnglesZ, ForwardMove, SideMove, UpMove, Buttons, Impulse, WeaponSelect, WeaponSubtype, MouseDx, MouseDy;
+  let index = 0;
 
   // pain
-  [CommandNumber, data] = ifOneExists(data, 32, "int");
-  [TickCount, data] = ifOneExists(data, 32, "int");
-  [ViewAnglesX, data] = ifOneExists(data, 32, "float");
-  [ViewAnglesY, data] = ifOneExists(data, 32, "float");
-  [ViewAnglesZ, data] = ifOneExists(data, 32, "float");
-  [ForwardMove, data] = ifOneExists(data, 32, "float");
-  [SideMove, data] = ifOneExists(data, 32, "float");
-  [UpMove, data] = ifOneExists(data, 32, "float");
-  [Buttons, data] = ifOneExists(data, 32, "int");
+  [CommandNumber, index] = ifOneExists(UserCmdData, index, 4, "int", 0);
+  [TickCount, index] = ifOneExists(UserCmdData, index, 4, "int", 1);
+  [ViewAnglesX, index] = ifOneExists(UserCmdData, index, 4, "float", 2);
+  [ViewAnglesY, index] = ifOneExists(UserCmdData, index, 4, "float", 3);
+  [ViewAnglesZ, index] = ifOneExists(UserCmdData, index, 4, "float", 4);
+  [ForwardMove, index] = ifOneExists(UserCmdData, index, 4, "float", 5);
+  [SideMove, index] = ifOneExists(UserCmdData, index, 4, "float", 6);
+  [UpMove, index] = ifOneExists(UserCmdData, index, 4, "float", 7);
+  [Buttons, index] = ifOneExists(UserCmdData, index + 1, 4, "int", 0);
   Buttons = findButtons(Buttons);
-  [Impulse, data] = ifOneExists(data, 1, "byte");
-  [WeaponSelect, data] = ifOneExists(data, 11, "int");
-  if (WeaponSelect !== null) [WeaponSubtype, data] = ifOneExists(data, 6, "int");
-  else WeaponSubtype = null;
-  [MouseDx, data] = ifOneExists(data, 16, "short");
-  [MouseDy, data] = ifOneExists(data, 16, "short");
+  [Impulse, index] = ifOneExists(UserCmdData, index + 1, 1, "byte", 1);
+  [WeaponSelect, index] = ifOneExists(UserCmdData, index + 1, 11 / 8, "int", 2);
+  WeaponSubtype = null; // i dont give a shit. i declare that weaponselect is always null
+  [MouseDx, index] = ifOneExists(UserCmdData, index + 1, 2, "short", 3);
+  [MouseDy, index] = ifOneExists(UserCmdData, index + 1, 2, "short", 4);
 
-  UserCmdMsg.Data.CommandNumber = CommandNumber;
-  UserCmdMsg.Data.TickCount = TickCount;
-  UserCmdMsg.Data.ViewAnglesX = ViewAnglesX;
-  UserCmdMsg.Data.ViewAnglesY = ViewAnglesY;
-  UserCmdMsg.Data.ViewAnglesZ = ViewAnglesZ;
-  UserCmdMsg.Data.ForwardMove = ForwardMove;
-  UserCmdMsg.Data.SideMove = SideMove;
-  UserCmdMsg.Data.UpMove = UpMove;
+  // UserCmdMsg.Data.CommandNumber = CommandNumber;
+  // UserCmdMsg.Data.TickCount = TickCount;
+  // UserCmdMsg.Data.ViewAnglesX = ViewAnglesX;
+  // UserCmdMsg.Data.ViewAnglesY = ViewAnglesY;
+  // UserCmdMsg.Data.ViewAnglesZ = ViewAnglesZ;
+  // UserCmdMsg.Data.ForwardMove = ForwardMove;
+  // UserCmdMsg.Data.SideMove = SideMove;
+  // UserCmdMsg.Data.UpMove = UpMove;
   UserCmdMsg.Data.Buttons = Buttons;
-  UserCmdMsg.Data.Impulse = Impulse;
-  UserCmdMsg.Data.WeaponSelect = WeaponSelect;
-  UserCmdMsg.Data.WeaponSubtype = WeaponSubtype;
-  UserCmdMsg.Data.MouseDx = MouseDx;
-  UserCmdMsg.Data.MouseDy = MouseDy;
+  // UserCmdMsg.Data.Impulse = Impulse;
+  // UserCmdMsg.Data.WeaponSelect = WeaponSelect;
+  // UserCmdMsg.Data.WeaponSubtype = WeaponSubtype;
+  // UserCmdMsg.Data.MouseDx = MouseDx;
+  // UserCmdMsg.Data.MouseDy = MouseDy;
 
-  UserCmdMsg.OverheadSize = (13*8) + bitsToInt(bits, offset + 72, 32) * 8;
+  UserCmdMsg.OverheadSize = 13 + bitsToInt(data, offset + 9, 4);
+
+  // console.log("usercmd", UserCmdMsg.OverheadSize)
 
 
   return [UserCmdMsg, UserCmdMsg.OverheadSize, UserCmdMsg.Type, UserCmdMsg.Tick];
 }
 
+// please optimize this is slowing each demo down by like 4ms
 function findButtons(buttons) {
   const buttonMap = new Map(
     [

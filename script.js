@@ -38,7 +38,7 @@ const fragment = document.createDocumentFragment();
 document.addEventListener("click", calibrate);
 
 let clicks = 0;
-const chamberName = "09";
+const chamberName = "08";
 const otherXInGame = mapInfo[chamberName].otherXInGame;
 const otherYInGame = mapInfo[chamberName].otherYInGame;
 let beginningXScreen, beginningYScreen, otherXScreen, otherYScreen;
@@ -72,30 +72,30 @@ function handleFileSelect(event) {
   for (const file of files) {
     // in charge of reading the contents of each file
     const reader = new FileReader();
-    const bitsPromise = new Promise((resolve) => {
+    const bytesPromise = new Promise((resolve) => {
       reader.onload = function (event) {
         const arrayBuffer = event.target.result;
         const bytes = new Uint8Array(arrayBuffer);
-        console.log(bytes);
+        // console.log(bytes);
 
         // fix fix fix fix fix
-        let bits = '';
-        for (let i = 0; i < bytes.length; i++) {
-          bits += bytes[i].toString(2).padStart(8, '0');
-        }
-        resolve(bits);
+        // let bits = '';
+        // for (let i = 0; i < bytes.length; i++) {
+        //   bits += bytes[i].toString(2).padStart(8, '0');
+        // }
+        resolve(bytes);
       };
     });
 
     reader.readAsArrayBuffer(file);
 
-    bitsPromise.then((bits) => {
+    bytesPromise.then((bytes) => {
 
       // get the time before a demo has finished parsing
       const timeBefore = updateETABeforeParse(files.length);
 
       // parse the demo and gather variables that are used while displaying the list of demos
-      const [demoLength, fileName, clientName, header] = parseDemo(bits, file);
+      const [demoLength, fileName, clientName, header] = parseDemo(bytes, file);
 
       // assign relevant data to the list of demos
       createPlayerRow(playerList, demoLength, fileName, clientName, header);
@@ -124,7 +124,7 @@ function parseDemo(bits, file) {
   const header = parseHeader(bits);
 
   // offset is after the header
-  let offset = 1072 * 8;
+  let offset = 1072;
 
   const positionX = new Map();
   const positionY = new Map();
@@ -135,7 +135,7 @@ function parseDemo(bits, file) {
   let firstTick = 0;
   let effectiveTick = 0;
 
-  while (offset < (file.size * 8)) {
+  while (offset < file.size) {
     const [message, OverheadSize, type, tick] = parseMessage(offset, bits);
     // the stop message
     if (type === 7) break;
@@ -149,8 +149,8 @@ function parseDemo(bits, file) {
       positionY.set(effectiveTick, message.PacketInfo.CmdInfo.ViewOrigin[1]);
       yaw.set(effectiveTick, message.PacketInfo.CmdInfo.ViewAngles[1]);
     }
-    // some demos (tas) have multiple usercmds on the first tick so we need to look at the actual tick count and not just count the amount of the message
     offset += OverheadSize;
+    // console.log("offset", offset)
   }
 
   // add adjusted time to the header. i have no clue why the error is 3 and not just 1
@@ -303,9 +303,10 @@ function findViewInformation(positionX, positionY, yaw, ratio, length, buttons, 
 
 function parseMessage(offset, bits) {
   // find what type of message it is
-  const messageTypeID = bitsToInt(bits, offset, 8);
+  const messageTypeID = bitsToInt(bits, offset, 1);
   const messageType = messageTable[messageTypeID];
-
+  
+  // console.log("HiAAAAA", messageTypeID, messageType)
   switch (messageType) {
     case "SignOn":
     case "Packet":
@@ -340,63 +341,63 @@ const messageTable = {
 // predetermined values for information stored in the header of a demo
 const headerFields = {
   "Filestamp": {
-      "index": 0,
-      "type": "str",
-      "sizeBits": 64
+    "index": 0,
+    "type": "str",
+    "sizeBytes": 8
   },
   "DemoProtocol": {
-      "index": 64,
-      "type": "int",
-      "sizeBits": 32
+    "index": 8,
+    "type": "int",
+    "sizeBytes": 4
   },
   "NetProtocol": {
-      "index": 96,
-      "type": "int",
-      "sizeBits": 32
+    "index": 12,
+    "type": "int",
+    "sizeBytes": 4
   },
   "ServerName": {
-      "index": 128,
-      "type": "str",
-      "sizeBits": 2080
+    "index": 16,
+    "type": "str",
+    "sizeBytes": 260
   },
   "ClientName": {
-      "index": 2208,
-      "type": "str",
-      "sizeBits": 2080
+    "index": 276,
+    "type": "str",
+    "sizeBytes": 260
   },
   "MapName": {
-      "index": 4288,
-      "type": "str",
-      "sizeBits": 2080
+    "index": 536,
+    "type": "str",
+    "sizeBytes": 260
   },
   "GameDir": {
-      "index": 6368,
-      "type": "str",
-      "sizeBits": 2080
+    "index": 796,
+    "type": "str",
+    "sizeBytes": 260
   },
   "PlaybackTime": {
-      "index": 8448,
-      "type": "float",
-      "sizeBits": 32
+    "index": 1056,
+    "type": "float",
+    "sizeBytes": 4
   },
   "PlaybackTicks": {
-      "index": 8480,
-      "type": "int",
-      "sizeBits": 32
+    "index": 1060,
+    "type": "int",
+    "sizeBytes": 4
   },
   "PlaybackFrames": {
-      "index": 8512,
-      "type": "int",
-      "sizeBits": 32
+    "index": 1064,
+    "type": "int",
+    "sizeBytes": 4
   },
   "SignOnLength": {
-      "index": 8544,
-      "type": "int",
-      "sizeBits": 32
+    "index": 1068,
+    "type": "int",
+    "sizeBytes": 4
   }
 };
 
-function parseHeader(bits) {
+function parseHeader(data) {
   const headerValues = {
     "Filestamp": null,
     "DemoProtocol": null,
@@ -423,39 +424,22 @@ function parseHeader(bits) {
     switch (field.type) {
       // those values in the header that are strings for instance the player name or test chamber name (testchmb_a_02 and not 04)
       case "str":
-        value = bitsToString(bits, field.index, field.sizeBits);
+        value = bitsToString(data, field.index, field.sizeBytes);
         break;
         
       // for example the amount of ticks a demo is
       case "int":
-        value = bitsToInt(bits, field.index, field.sizeBits);
+        value = bitsToInt(data, field.index, field.sizeBytes);
         break;
 
       // literally only PlaybackTime uses float (the time of the demo, like 53.01)
       case "float":
-        value = bitsToFloat(bits, field.index, field.sizeBits);
+        value = bitsToFloat(data, field.index, field.sizeBytes);
         break;
     }
     headerValues[fieldName] = value;
   }
-  const header = `
-  Filestamp \t\t : ${headerValues.Filestamp}
-  DemoProtocol \t\t : ${headerValues.DemoProtocol}
-  NetProtocol \t\t : ${headerValues.NetProtocol}
-  ServerName \t\t : ${headerValues.ServerName}
-  ClientName \t\t : ${headerValues.ClientName}
-  MapName \t\t : ${headerValues.MapName}
-  GameDir \t\t : ${headerValues.GameDir}
-  PlaybackTime \t\t : ${headerValues.PlaybackTime}
-  PlaybackTicks \t : ${headerValues.PlaybackTicks}
-  PlaybackFrames \t : ${headerValues.PlaybackFrames}
-  SignOnLength \t\t : ${headerValues.SignOnLength}
-
-  Measured Time \t : ${Math.floor(headerValues.PlaybackTime / 60) === 0 ? "" : Math.floor(headerValues.PlaybackTime / 60) + ":"}${(headerValues.PlaybackTime - 60 * Math.floor(headerValues.PlaybackTime / 60)).toFixed(3)}
-  Measured Ticks \t : ${headerValues.PlaybackTicks}
-  `
-  // console.log(header);
-
+  
   return headerValues;
 }
 

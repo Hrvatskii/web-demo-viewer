@@ -17,7 +17,9 @@ const parseConsoleCmdMessage = (offset, bits) => {
 
   // ConsoleCmdMsg.OverheadSize = ConsoleCmdMsg.OverheadSize + ConsoleCmdMsg.Size * 8;
 
-  const OverheadSize = (9*8) + bitsToInt(bits, offset + 40, 32) * 8;
+  const OverheadSize = 9 + bitsToInt(bits, offset + 5, 4);
+
+  // console.log("consolecmd", OverheadSize)
 
   //const type = bitsToInt(bits, offset, 8);
 

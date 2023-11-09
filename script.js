@@ -193,9 +193,9 @@ function displayToScreen() {
         }
       }
       if (document.querySelector(`.box-content[data-value="${player.fileName}"]`) && player.buttons.get(currentTick)) {
-        player.buttons.get(currentTick).forEach((action) => {
-          document.querySelector(`.box-content[data-value="${player.fileName}"] .key[data-value="${action}"]`).dataset.status = "active";
-        })
+        for (const button of document.querySelector(`.box-content[data-value="${player.fileName}"]`).children) {
+          if ((player.buttons.get(currentTick) & Number(button.dataset.value)) > 0) button.dataset.status = "active";
+        }
       }
     })
     currentTick++;

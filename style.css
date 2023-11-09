@@ -89,7 +89,7 @@ body {
 
 #player-list {
   min-width: 600px;
-  max-height: 400px;
+  max-height: 100px;
   min-height: 30px;
   overflow-y: scroll;
   background-color: rgba(0, 0, 0, 0.836);
@@ -178,5 +178,5 @@ body {
 }
 
 .key[data-status="active"] {
-  background-color: black;
+  background-color: rgb(50, 138, 108);
 }

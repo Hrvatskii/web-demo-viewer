@@ -23,7 +23,6 @@ const initializeDemoList = () => {
 const demoListResizeEventListener = (playerList, playerListTopBorder) => {
   playerListTopBorder.addEventListener("mousedown", () => {
     document.body.addEventListener("mousemove", resizePlayerList);
-    playerList.style.maxHeight = "100vh";
   });
   document.body.addEventListener("mouseup", () => {
     document.body.removeEventListener("mousemove", resizePlayerList);
@@ -35,6 +34,7 @@ const resizePlayerList = (event) => {
   const yPos = event.clientY;
   const screenHeight = document.documentElement.clientHeight;
   const newHeight = screenHeight - yPos;
+  document.getElementById("player-list").style.maxHeight = "100vh";
   document.getElementById("player-list").style.height = newHeight+"px";
 }
 
@@ -107,22 +107,22 @@ const createKeyboard = () => {
   // why do i create such attrocities
   createKey("");
   createKey("");
-  createKey("W", "IN_FORWARD");
-  createKey("E", "IN_USE");
+  createKey("W", "8");
+  createKey("E", "32");
   createKey("");
   createKey("");
 
   createKey("");
-  createKey("A", "IN_MOVELEFT");
-  createKey("S", "IN_BACK");
-  createKey("D", "IN_MOVERIGHT");
+  createKey("A", "512");
+  createKey("S", "16");
+  createKey("D", "1024");
   createKey("");
   createKey("");
 
-  createKey("C", "IN_DUCK");
-  createKey("S", "IN_JUMP","long"); // takes up 3 normal squares
-  createKey("L", "IN_ATTACK");
-  createKey("R", "IN_ATTACK2");
+  createKey("C", "4");
+  createKey("S", "2", "long"); // takes up 3 normal squares
+  createKey("L", "1");
+  createKey("R", "2048");
 
   return innerHtml;
 }

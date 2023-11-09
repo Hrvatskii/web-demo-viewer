@@ -48,29 +48,17 @@ const bitsToFloat = (data, index, length) => {
 }
 
 const readFloatArr = (data, index, length, count) => {
-  let arr = [];
+  const floatsLength = length / 3;
+  const arr = [];
+
   for (let i = 0; i < count; i++) {
-    let floats = isolateBytes(data, index, length / 3);
-    // console.log("floats", floats, length / 3)
+    const floats = isolateBytes(data, index, floatsLength);
     arr.push(bitsToFloat(floats, 0, 4));
-    index += (length / 3); 
+    index += floatsLength;
   }
+
   return arr;
-}
-
-// this converts a series of bits to little endian which means that we seperate the bytes and reverse their order eg.
-// 00000001 10000000 11111111 10101010 (00000001100000001111111110101010) to
-// 10101010 11111111 10000000 00000001 (10101010111111111000000000000001)
-function convertToLittleEndian(bits) {
-  const bytes = [];
-  for (let i = 0; i < bits.length; i += 8) {
-    const byte = bits.substr(i, 8);
-    bytes.push(byte);
-  }
-
-  bytes.reverse();
-  return bytes.join('');
-}
+};
 
 function isolateBytes(data, index, length) {
   // Calculate the start and end bytes
@@ -94,83 +82,21 @@ function isolateBytes(data, index, length) {
   return isolatedBytes;
 }
 
-// // optimize this in the future pretty please
-// const ifOneExists = (data, length, type) => {
-//   // see https://imgur.com/a/LRoI4r2
-
-//   // find pointer index using *math*
-//   const pointer = (data.length - 1) % 8;
-//   //console.log("pointer", pointer);
-//   if (data[pointer] === "1") {
-//     //console.log("one exists, parse next ", length, " looking at ", type);
-//     // declare array for little endian bits
-//     let bitsLittleEndian = [];
-
-//     // first bits, these are the remaining ones to the left of the pointer
-//     bitsLittleEndian.unshift(data.substr(0, pointer));
-
-//     // the next whole bytes
-//     for (let i = 0; i < 8 * (Math.floor((length - pointer) / 8)); i += 8) {
-//       bitsLittleEndian.unshift(data.substr(pointer + 1 + i, 8));
-//     }
-
-//     // remove everything before the next "full" byte
-//     data = data.substr(8 * (Math.floor((length - pointer) / 8)) + pointer + 1, data.length);
-
-//     // add the extra bits we need to compensate the first byte being shorter
-//     bitsLittleEndian.unshift(data.substr(pointer, 8 - pointer));
-
-//     //... and then remove those from the main data
-//     data = data.substr(0, pointer) + data.substr(8, data.length);
-
-//     // make the little endian bits into a string so we can process them
-//     bitsLittleEndian = bitsLittleEndian.join("");
-
-//     if (type === "int") {
-//       // convert to unsigned integer then signed integer
-//       const uint32Value = parseInt(bitsLittleEndian, 2);
-//       const int32Value = uint32Value | 0;
-
-//       return [int32Value, data];
-//     } else if (type === "float") {
-//       // convert the bits into a hexadecimal string
-//       const hex = parseInt(bitsLittleEndian, 2).toString(16);
-
-//       // convert the hexadecimal string into a float representation
-//       const buffer = new ArrayBuffer(4);
-//       const intView = new Uint32Array(buffer);
-//       const floatView = new Float32Array(buffer);
-
-//       intView[0] = parseInt(hex, 16);
-
-//       return [floatView[0].toFixed(2), data];
-//     } else if (type === "byte") {
-//       // i think only Impulse has this data type so it's safe assuming it's only gonna be one byte
-//       const byte = parseInt(bitsLittleEndian, 2) // turn into base 10
-//                   .toString(16)                  // turn into base 16
-//                   .padStart(2, "0");             // pad with 0 to make it two letters long
-
-//       return [byte, data];
-//     } else if (type === "short") {
-//       const short = parseInt(bitsLittleEndian, 2) << 16 >> 16;
-//       return [short, data];
-//     }
-//   } else {
-//     //console.log("one doesnt exist, skip to next");
-//     data = data.substr(0, pointer) + data.substr(pointer + 1, data.length);
-//     return [null, data];
-//   }
-// }
-
-const ifOneExists = (data, index, length, type, bitPointer) => {
+// this is stupid
+// unsustainable if i want to parse something else in usercmd except for Buttons
+// at least it makes parsing a lot faster lol
+const ifOneExists = (data, index, length, type, bitPointer, name) => {
   // console.log(data, length, type);
-  data = [...data];
+  //data = [...data];
 
   //let isolatedBytes = isolateBytes(data, index, index + length + 1);
 
   // console.log("isolated: ", isolatedBytes);
 
   if (data[index] & (1 << bitPointer)) {
+
+    if (!name) return [null, index + length];
+
     //console.log("bit found. continuing.");
     // makes every bit less significant than the pointer a 0 in the first byte
     // data[index] = data[index] >> (bitPointer + 1) << (bitPointer + 1)
@@ -183,13 +109,15 @@ const ifOneExists = (data, index, length, type, bitPointer) => {
 
     // console.log("isolated new:", bitsToInt(data, index, length + 1) >> (bitPointer + 1), isolateBytes(data, index, length + 1))
 
-    switch (type) {
-      case "int": return [bitsToInt(data, index, length + 1) >> (bitPointer + 1), index + length];
-      case "float":
-      case "short":
-      case "byte":
-        return [null, index + length]; // i dont give a shit
-    }
+    return [bitsToInt(data, index, length + 1) >> (bitPointer + 1), index + length];
+
+    // switch (type) {
+    //   case "int": 
+    //   case "float":
+    //   case "short":
+    //   case "byte":
+    //     return [null, index + length]; // i dont give a shit
+    // }
 
   } else {
     return [null, index];
